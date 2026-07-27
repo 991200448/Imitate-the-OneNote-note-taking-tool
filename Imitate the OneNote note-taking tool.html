@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仿OneNote笔记工具</title>
+    <style>
+        :root {
+            --bg: #f5f5f5;
+            --sidebar-bg: #f0f0f0;
+            --panel-bg: #ffffff;
+            --border: #e0e0e0;
+            --text: #333;
+            --text-secondary: #666;
+            --primary: #80397b;
+            --primary-light: #9c4f96;
+            --primary-lighter: #f3e5f5;
+            --hover: #e8e8e8;
+            --active: #e0d4e8;
+            --shadow: 0 1px 3px rgba(0,0,0,0.1);
+            --toolbar-bg: #fafafa;
+            --input-bg: #fff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部标题栏 */
+        .titlebar {
+            height: 40px;
+            background: var(--primary);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            font-size: 14px;
+            font-weight: 600;
+            user-select: none;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+        .titlebar .logo { margin-right: 10px; font-size: 18px; }
+        .titlebar .search-box {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            padding: 2px 8px;
+        }
+        .titlebar .search-box input {
+            background: transparent;
+            border: none;
+            color: #fff;
+            outline: none;
+            font-size: 13px;
+            width: 180px;
+        }
+        .titlebar .search-box input::placeholder { color: rgba(255,255,255,0.7); }
+        .titlebar .search-box .search-icon { margin-right: 4px; opacity: 0.8; }
+
+        /* 主布局 */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 笔记本侧边栏 */
+        .notebook-sidebar {
+            width: 200px;
+            min-width: 160px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .panel-header {
+            padding: 10px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+        }
+        .panel-header .add-btn {
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: var(--primary);
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+        .panel-header .add-btn:hover { background: var(--primary-lighter); }
+        .panel-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+        .panel-list::-webkit-scrollbar { width: 5px; }
+        .panel-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+        .panel-list::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+        .notebook-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            border-left: 3px solid transparent;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+        }
+        .notebook-item:hover { background: var(--hover); }
+        .notebook-item.active {
+            background: var(--active);
+            border-left-color: var(--primary);
+            font-weight: 600;
+        }
+        .notebook-item .icon { font-size: 16px; flex-shrink: 0; }
+        .notebook-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .notebook-item .delete-btn {
+            opacity: 0;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 14px;
+            color: #999;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .notebook-item:hover .delete-btn { opacity: 1; }
+        .notebook-item .delete-btn:hover { background: #fee; color: #e53935; }
+
+        /* 内容区域 */
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--panel-bg);
+        }
+
+        /* 分区标签栏 */
+        .section-tabs-bar {
+            height: 42px;
+            background: #e8e8e8;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 0 8px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .section-tabs-bar::-webkit-scrollbar { height: 3px; }
+        .section-tabs-bar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+        .section-tab {
+            padding: 5px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            white-space: nowrap;
+            user-select: none;
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+            position: relative;
+            flex-shrink: 0;
+            max-width: 160px;
+        }
+        .section-tab.inactive {
+            background: #ddd;
+            color: #777;
+        }
+        .section-tab.inactive:hover { background: #d0d0d0; }
+        .section-tab.active {
+            background: #fff;
+            color: var(--text);
+            font-weight: 700;
+            box-shadow: 0 -1px 3px rgba(0,0,0,0.1);
+        }
+        .tab-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .tab-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .tab-delete {
+            opacity: 0;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 12px;
+            color: #999;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+        .section-tab:hover .tab-delete { opacity: 1; }
+        .tab-delete:hover { background: #fee; color: #e53935; }
+        .add-section-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            font-size: 18px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+            margin-left: 4px;
+        }
+        .add-section-btn:hover { background: #d0d0d0; color: var(--primary); }
+
+        /* 编辑区域 */
+        .editor-area {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* 页面侧边栏 */
+        .page-sidebar {
+            width: 220px;
+            min-width: 170px;
+            background: var(--panel-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .page-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+        .page-list::-webkit-scrollbar { width: 5px; }
+        .page-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+        .page-list::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+        .page-item {
+            padding: 8px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+            border-left: 3px solid transparent;
+        }
+        .page-item:hover { background: var(--hover); }
+        .page-item.active {
+            background: var(--hover);
+            border-left-color: var(--primary);
+            font-weight: 600;
+        }
+        .page-item .icon { font-size: 14px; flex-shrink: 0; color: var(--text-secondary); }
+        .page-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .page-item .page-time {
+            font-size: 10px;
+            color: #aaa;
+            flex-shrink: 0;
+        }
+        .page-item .delete-btn {
+            opacity: 0;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 14px;
+            color: #999;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .page-item:hover .delete-btn { opacity: 1; }
+        .page-item .delete-btn:hover { background: #fee; color: #e53935; }
+
+        /* 编辑器面板 */
+        .editor-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--panel-bg);
+        }
+        .editor-title {
+            padding: 16px 24px 0;
+            border: none;
+            font-size: 22px;
+            font-weight: 700;
+            outline: none;
+            color: var(--text);
+            font-family: inherit;
+        }
+        .editor-title::placeholder { color: #bbb; }
+        .editor-meta {
+            padding: 4px 24px 8px;
+            font-size: 11px;
+            color: #aaa;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* 工具栏 */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 6px 16px;
+            background: var(--toolbar-bg);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 1px;
+        }
+        .toolbar-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border);
+            margin: 0 6px;
+        }
+        .tool-btn {
+            width: 30px;
+            height: 30px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+            position: relative;
+        }
+        .tool-btn:hover { background: var(--hover); color: var(--text); }
+        .tool-btn:active, .tool-btn.active { background: var(--primary-lighter); color: var(--primary); }
+        .tool-btn[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: -28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .editor-content {
+            flex: 1;
+            padding: 20px 24px;
+            border: none;
+            outline: none;
+            font-size: 15px;
+            line-height: 1.8;
+            overflow-y: auto;
+            resize: none;
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            color: var(--text);
+        }
+        .editor-content:empty::before {
+            content: '在此处输入笔记内容...';
+            color: #bbb;
+        }
+        .editor-content::-webkit-scrollbar { width: 8px; }
+        .editor-content::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        .editor-content::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+        /* 弹窗 */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.15s;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            padding: 24px;
+            min-width: 360px;
+            max-width: 480px;
+        }
+        .modal h3 {
+            margin-bottom: 16px;
+            font-size: 16px;
+            color: var(--text);
+        }
+        .modal label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .modal input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 14px;
+            outline: none;
+            font-family: inherit;
+            margin-bottom: 12px;
+        }
+        .modal input:focus { border-color: var(--primary); }
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .modal-buttons button {
+            padding: 8px 20px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.15s;
+        }
+        .btn-cancel { background: #eee; color: var(--text); }
+        .btn-cancel:hover { background: #ddd; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-light); }
+        .btn-danger { background: #e53935; color: #fff; }
+        .btn-danger:hover { background: #c62828; }
+
+        /* 空状态 */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #bbb;
+            font-size: 14px;
+            gap: 8px;
+            user-select: none;
+        }
+        .empty-state .empty-icon { font-size: 48px; opacity: 0.5; }
+
+        /* 提示消息 */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 13px;
+            z-index: 2000;
+            animation: toastIn 0.3s;
+            pointer-events: none;
+        }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+        /* 右键菜单 */
+        .context-menu {
+            position: fixed;
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            z-index: 1500;
+            min-width: 150px;
+            padding: 4px 0;
+            display: none;
+        }
+        .context-menu .menu-item {
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .context-menu .menu-item:hover { background: var(--hover); }
+        .context-menu .menu-item.danger { color: #e53935; }
+
+        /* 文件夹选择 */
+        .fs-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 5000;
+        }
+        .fs-dialog {
+            background: #fff; border-radius: 12px;
+            padding: 36px 40px; text-align: center;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+            max-width: 440px;
+        }
+        .fs-dialog h2 { margin-bottom: 8px; color: var(--primary); font-size: 18px; }
+        .fs-dialog p { color: #888; font-size: 13px; margin-bottom: 20px; line-height: 1.6; }
+        .fs-dialog .fs-btn {
+            padding: 12px 32px; background: var(--primary); color: #fff;
+            border: none; border-radius: 6px; font-size: 15px;
+            cursor: pointer; font-family: inherit;
+        }
+        .fs-dialog .fs-btn:hover { background: var(--primary-light); }
+        .fs-dialog .fs-path { margin-top: 16px; font-size: 12px; color: #aaa; word-break: break-all; }
+        .fs-dialog .fs-change { margin-top: 12px; font-size: 12px; }
+        .fs-dialog .fs-change a { color: var(--primary); cursor: pointer; text-decoration: underline; }
+
+        /* loading */
+        .loading-spinner {
+            display: inline-block; width: 20px; height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff; border-radius: 50%;
+            animation: spin 0.6s linear infinite; margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <!-- 标题栏 -->
+    <div class="titlebar">
+        <span class="logo">📒</span>
+        <span>仿OneNote笔记工具</span>
+        <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" placeholder="搜索笔记..." oninput="handleSearch()">
+        </div>
+    </div>
+
+    <!-- 主布局 -->
+    <div class="main-container">
+        <!-- 左侧笔记本 -->
+        <div class="notebook-sidebar">
+            <div class="panel-header">
+                <span>📚 笔记本</span>
+                <button class="add-btn" title="新建笔记本" onclick="showModal('notebook')">+</button>
+            </div>
+            <div class="panel-list" id="notebookList"></div>
+        </div>
+
+        <!-- 右侧主区域 -->
+        <div class="content-area">
+            <!-- 顶部分区标签栏 -->
+            <div class="section-tabs-bar" id="sectionTabsBar"></div>
+
+            <!-- 页面列表 + 编辑器 -->
+            <div class="editor-area">
+                <div class="page-sidebar">
+                    <div class="panel-header">
+                        <span>📄 页面</span>
+                        <button class="add-btn" title="新建页面" onclick="showModal('page')">+</button>
+                    </div>
+                    <div class="page-list" id="pageList"></div>
+                </div>
+                <div class="editor-panel">
+                    <input class="editor-title" id="editorTitle" placeholder="页面标题..." oninput="onTitleChange()">
+                    <div class="editor-meta" id="editorMeta"></div>
+                    <div class="toolbar" id="toolbar" style="display:none;">
+                        <div class="toolbar-group">
+                            <button class="tool-btn" title="撤销" onclick="execCmd('undo')">↩</button>
+                            <button class="tool-btn" title="重做" onclick="execCmd('redo')">↪</button>
+                        </div>
+                        <span class="toolbar-divider"></span>
+                        <div class="toolbar-group">
+                            <button class="tool-btn" title="加粗" onclick="execCmd('bold')"><b>B</b></button>
+                            <button class="tool-btn" title="斜体" onclick="execCmd('italic')"><i>I</i></button>
+                            <button class="tool-btn" title="下划线" onclick="execCmd('underline')"><u>U</u></button>
+                            <button class="tool-btn" title="删除线" onclick="execCmd('strikeThrough')"><s>S</s></button>
+                        </div>
+                        <span class="toolbar-divider"></span>
+                        <div class="toolbar-group">
+                            <button class="tool-btn" title="标题1" onclick="execCmd('formatBlock', 'h1')">H1</button>
+                            <button class="tool-btn" title="标题2" onclick="execCmd('formatBlock', 'h2')">H2</button>
+                            <button class="tool-btn" title="标题3" onclick="execCmd('formatBlock', 'h3')">H3</button>
+                            <button class="tool-btn" title="正文" onclick="execCmd('formatBlock', 'p')">¶</button>
+                        </div>
+                        <span class="toolbar-divider"></span>
+                        <div class="toolbar-group">
+                            <button class="tool-btn" title="无序列表" onclick="execCmd('insertUnorderedList')">●≡</button>
+                            <button class="tool-btn" title="有序列表" onclick="execCmd('insertOrderedList')">1≡</button>
+                            <button class="tool-btn" title="减少缩进" onclick="execCmd('outdent')">←</button>
+                            <button class="tool-btn" title="增加缩进" onclick="execCmd('indent')">→</button>
+                        </div>
+                    </div>
+                    <div class="editor-content" id="editorContent" contenteditable="true" oninput="onContentChange()">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗 -->
+    <div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="if(event.target===this)closeModal()">
+        <div class="modal" id="modalBox">
+            <h3 id="modalTitle">新建</h3>
+            <label id="modalLabel">名称</label>
+            <input type="text" id="modalInput" placeholder="输入名称..." onkeydown="if(event.key==='Enter')confirmModal()">
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeModal()">取消</button>
+                <button class="btn-primary" onclick="confirmModal()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文件夹选择 -->
+    <div class="fs-overlay" id="fsOverlay">
+        <div class="fs-dialog">
+            <h2>📒 选择笔记存储目录</h2>
+            <p>选择一个本地文件夹作为笔记根目录。<br>笔记本=一级文件夹 | 分区=二级文件夹 | 页面=.md文件</p>
+            <button class="fs-btn" id="fsSelectBtn" onclick="selectRootFolder()">选择文件夹</button>
+            <div class="fs-path" id="fsPath"></div>
+        </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="context-menu" id="contextMenu"></div>
+
+    <script>
+        // ==================== 文件系统持久化（File System Access API + IndexedDB） ====================
+        // 笔记本=一级文件夹 | 分区=二级文件夹 | 页面=.md文件(YAML front matter + HTML body)
+
+        let data = { notebooks: [], activeNotebookId: null, activeSectionId: null, activePageId: null };
+        let rootHandle = null;  // FileSystemDirectoryHandle
+
+        // ==================== IndexedDB：持久化目录句柄 ====================
+        const DB_NAME = 'OneNoteFSDB';
+        const DB_VERSION = 1;
+        function openIDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, DB_VERSION);
+                req.onupgradeneeded = () => { req.result.createObjectStore('handles'); };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+        async function storeRootHandle(handle) {
+            const db = await openIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('handles', 'readwrite');
+                tx.objectStore('handles').put(handle, 'rootDir');
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+        async function getStoredRootHandle() {
+            const db = await openIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('handles', 'readonly');
+                const req = tx.objectStore('handles').get('rootDir');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        // ==================== 文件夹选择 ====================
+        async function selectRootFolder() {
+            try {
+                const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                rootHandle = handle;
+                await storeRootHandle(handle);
+                document.getElementById('fsPath').textContent = '📁 ' + handle.name;
+                document.getElementById('fsSelectBtn').textContent = '重新选择文件夹';
+                await scanAndLoad();
+            } catch(e) {
+                if (e.name !== 'AbortError') showToast('选择文件夹失败: ' + e.message);
+            }
+        }
+
+        async function initFileSystem() {
+            // 尝试恢复之前保存的目录句柄
+            try {
+                const stored = await getStoredRootHandle();
+                if (stored) {
+                    // 验证权限
+                    const perm = await stored.queryPermission({ mode: 'readwrite' });
+                    if (perm === 'granted') {
+                        rootHandle = stored;
+                    } else {
+                        const newPerm = await stored.requestPermission({ mode: 'readwrite' });
+                        if (newPerm === 'granted') {
+                            rootHandle = stored;
+                        }
+                    }
+                }
+            } catch(e) { /* 忽略 */ }
+
+            if (rootHandle) {
+                document.getElementById('fsPath').textContent = '📁 ' + rootHandle.name;
+                document.getElementById('fsSelectBtn').textContent = '重新选择文件夹';
+                await scanAndLoad();
+            }
+        }
+
+        // ==================== 扫描目录构建数据模型 ====================
+        async function scanAndLoad() {
+            saveCurrentPageContentSilent();
+            data.notebooks = [];
+            try {
+                for await (const [nbName, nbHandle] of rootHandle.entries()) {
+                    if (nbHandle.kind !== 'directory') continue;
+                    const notebook = { id: nbName, name: nbName, sections: [], _handle: nbHandle };
+                    for await (const [secName, secHandle] of nbHandle.entries()) {
+                        if (secHandle.kind !== 'directory') continue;
+                        const section = { id: secName, name: secName, pages: [], _handle: secHandle };
+                        for await (const [pageName, pageHandle] of secHandle.entries()) {
+                            if (pageHandle.kind !== 'file' || !pageName.endsWith('.md')) continue;
+                            try {
+                                const file = await pageHandle.getFile();
+                                const text = await file.text();
+                                const { title, created, updated, body } = parseFrontMatter(text);
+                                section.pages.push({
+                                    id: pageName,
+                                    title: title || pageName.replace(/\.md$/, ''),
+                                    content: body || '',
+                                    createdAt: created || new Date(file.lastModified).toISOString(),
+                                    updatedAt: updated || new Date(file.lastModified).toISOString(),
+                                    _handle: pageHandle
+                                });
+                            } catch(e) { /* skip corrupted */ }
+                        }
+                        section.pages.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+                        section._createdAt = await readMetaCreatedAt(secHandle);
+                        notebook.sections.push(section);
+                    }
+                    // 分区按创建时间升序排列（先创建在上）
+                    notebook.sections.sort((a, b) => {
+                        const ta = a._createdAt || '9999';
+                        const tb = b._createdAt || '9999';
+                        return ta.localeCompare(tb);
+                    });
+                    notebook._createdAt = await readMetaCreatedAt(nbHandle);
+                    data.notebooks.push(notebook);
+                }
+                // 笔记本按创建时间升序排列（先创建在上）
+                data.notebooks.sort((a, b) => {
+                    const ta = a._createdAt || '9999';
+                    const tb = b._createdAt || '9999';
+                    return ta.localeCompare(tb);
+                });
+            } catch(e) {
+                console.error('扫描目录失败:', e);
+                showToast('目录读取失败，请重新选择文件夹');
+                rootHandle = null;
+                document.getElementById('fsOverlay').style.display = 'flex';
+                return;
+            }
+
+            // 确保无数据时创建默认结构
+            if (data.notebooks.length === 0) {
+                await createDefaultStructure();
+                await scanAndLoad();
+                return;
+            }
+
+            // 恢复选择状态
+            if (data.notebooks.length > 0) {
+                if (!data.notebooks.find(n => n.id === data.activeNotebookId)) {
+                    data.activeNotebookId = data.notebooks[0].id;
+                }
+                const nb = data.notebooks.find(n => n.id === data.activeNotebookId);
+                if (nb && nb.sections.length > 0) {
+                    if (!nb.sections.find(s => s.id === data.activeSectionId)) {
+                        data.activeSectionId = nb.sections[0].id;
+                    }
+                    const sec = nb.sections.find(s => s.id === data.activeSectionId);
+                    if (sec && sec.pages.length > 0) {
+                        if (!sec.pages.find(p => p.id === data.activePageId)) {
+                            data.activePageId = sec.pages[0].id;
+                        }
+                    } else if (sec && sec.pages.length === 0) {
+                        data.activePageId = null;
+                    }
+                } else if (nb && nb.sections.length === 0) {
+                    data.activeSectionId = null;
+                    data.activePageId = null;
+                }
+            }
+
+            document.getElementById('fsOverlay').style.display = 'none';
+            renderAll();
+        }
+
+        async function createDefaultStructure() {
+            const now = new Date().toISOString();
+            const nbHandle = await rootHandle.getDirectoryHandle('我的笔记本', { create: true });
+            await writeMetaFile(nbHandle, now);
+            const secHandle = await nbHandle.getDirectoryHandle('新分区1', { create: true });
+            await writeMetaFile(secHandle, now);
+            const content = '<h2>🎉 欢迎使用仿OneNote笔记工具！</h2><p>这是一个功能丰富的本地笔记应用，支持：</p><ul><li>📒 多笔记本管理</li><li>📑 分区（Section）归类</li><li>📄 页面自由编辑（.md文件存储）</li><li>✏️ 富文本编辑（加粗、斜体、标题、列表等）</li><li>🎨 文字颜色与背景色</li><li>🖼 插入图片</li><li>🔗 插入超链接</li><li>💾 自动保存到本地文件系统</li><li>🔍 搜索笔记内容</li></ul><p>文件结构：<br>📁 我的笔记本/ &nbsp;→ &nbsp;📁 新分区1/ &nbsp;→ &nbsp;📄 欢迎使用.md</p><p>开始你的笔记之旅吧！</p>';
+            await writePageFile(secHandle, '欢迎使用', '欢迎使用', content, now, now);
+        }
+
+        // ==================== YAML Front Matter 解析 ====================
+        function parseFrontMatter(text) {
+            const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+            if (!match) return { title: '', created: '', updated: '', body: text };
+            const yamlBlock = match[1];
+            const body = match[2];
+            const result = { title: '', created: '', updated: '', body };
+            yamlBlock.split(/\r?\n/).forEach(line => {
+                const idx = line.indexOf(':');
+                if (idx > 0) {
+                    const key = line.substring(0, idx).trim();
+                    const val = line.substring(idx + 1).trim();
+                    result[key] = val;
+                }
+            });
+            return result;
+        }
+
+        function generateFrontMatter(title, created, updated) {
+            return `---\ntitle: ${title}\ncreated: ${created}\nupdated: ${updated}\n---\n\n`;
+        }
+
+        // ==================== 文件读写 ====================
+        async function writePageFile(dirHandle, filename, title, content, created, updated) {
+            const safeName = sanitizeFilename(filename) + '.md';
+            const fileHandle = await dirHandle.getFileHandle(safeName, { create: true });
+            const writable = await fileHandle.createWritable();
+            const fm = generateFrontMatter(title, created, updated);
+            await writable.write(fm + (content || ''));
+            await writable.close();
+            return fileHandle;
+        }
+
+        async function readPageFile(dirHandle, filename) {
+            const fileHandle = await dirHandle.getFileHandle(filename);
+            const file = await fileHandle.getFile();
+            return await file.text();
+        }
+
+        // 元数据文件（记录创建时间用于排序）
+        async function writeMetaFile(dirHandle, createdAt) {
+            const fh = await dirHandle.getFileHandle('_meta_.json', { create: true });
+            const w = await fh.createWritable();
+            await w.write(JSON.stringify({ createdAt }));
+            await w.close();
+        }
+        async function readMetaCreatedAt(dirHandle) {
+            try {
+                const fh = await dirHandle.getFileHandle('_meta_.json');
+                const file = await fh.getFile();
+                const meta = JSON.parse(await file.text());
+                return meta.createdAt || null;
+            } catch(e) { return null; }
+        }
+
+        async function renameEntry(parentHandle, oldName, newName) {
+            // File System Access API 没有直接重命名API，使用复制+删除方式
+            const entry = await parentHandle.getDirectoryHandle(oldName).catch(() =>
+                parentHandle.getFileHandle(oldName));
+            if (entry.kind === 'directory') {
+                const newDir = await parentHandle.getDirectoryHandle(newName, { create: true });
+                await copyDir(entry, newDir);
+                await parentHandle.removeEntry(oldName, { recursive: true });
+            } else {
+                const file = await entry.getFile();
+                const content = await file.text();
+                const newFile = await parentHandle.getFileHandle(newName, { create: true });
+                const w = await newFile.createWritable();
+                await w.write(content);
+                await w.close();
+                await parentHandle.removeEntry(oldName);
+            }
+        }
+
+        async function copyDir(srcHandle, destHandle) {
+            for await (const [name, handle] of srcHandle.entries()) {
+                if (handle.kind === 'directory') {
+                    const subDir = await destHandle.getDirectoryHandle(name, { create: true });
+                    await copyDir(handle, subDir);
+                } else {
+                    const file = await handle.getFile();
+                    const content = await file.text();
+                    const newFile = await destHandle.getFileHandle(name, { create: true });
+                    const w = await newFile.createWritable();
+                    await w.write(content);
+                    await w.close();
+                }
+            }
+        }
+
+        function sanitizeFilename(name) {
+            return name.replace(/[<>:"/\\|?*]/g, '_').trim() || 'untitled';
+        }
+
+        // ==================== 查找工具函数 ====================
+        function findNotebook(id) { return data.notebooks.find(n => n.id === id); }
+        function findSection(id) {
+            for (const nb of data.notebooks) {
+                const sec = nb.sections.find(s => s.id === id);
+                if (sec) return sec;
+            }
+            return null;
+        }
+        function findActiveNotebook() { return findNotebook(data.activeNotebookId); }
+        function findActiveSection() { return findSection(data.activeSectionId); }
+        function findActivePage() {
+            const sec = findActiveSection();
+            if (!sec) return null;
+            return sec.pages.find(p => p.id === data.activePageId);
+        }
+
+        // ==================== 渲染函数 ====================
+        function renderAll() {
+            renderNotebooks();
+            renderSections();
+            renderPages();
+            renderEditor();
+        }
+
+        function renderNotebooks() {
+            const list = document.getElementById('notebookList');
+            if (data.notebooks.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div><div>暂无笔记本</div></div>';
+                return;
+            }
+            list.innerHTML = data.notebooks.map(nb => `
+                <div class="notebook-item ${nb.id === data.activeNotebookId ? 'active' : ''}"
+                     onclick="selectNotebook('${escapeAttr(nb.id)}')"
+                     oncontextmenu="showContextMenu(event, 'notebook', '${escapeAttr(nb.id)}')">
+                    <span class="icon">📒</span>
+                    <span class="name">${escapeHtml(nb.name)}</span>
+                    <button class="delete-btn" title="删除" onclick="event.stopPropagation();deleteNotebook('${escapeAttr(nb.id)}')">×</button>
+                </div>
+            `).join('');
+        }
+
+        function renderSections() {
+            const bar = document.getElementById('sectionTabsBar');
+            const nb = findActiveNotebook();
+            const colors = ['#80397b','#2a7bb8','#3a8c5c','#c7503e','#e8852d','#2d8a8a','#c94f7a','#6b4fa0','#4a8c3f','#c4722a'];
+            let html = '';
+            if (nb && nb.sections.length > 0) {
+                html = nb.sections.map((sec, idx) => {
+                    const color = colors[idx % colors.length];
+                    const cls = sec.id === data.activeSectionId ? 'active' : 'inactive';
+                    return `<div class="section-tab ${cls}"
+                        onclick="selectSection('${escapeAttr(sec.id)}')"
+                        oncontextmenu="showContextMenu(event, 'section', '${escapeAttr(sec.id)}')">
+                        <span class="tab-color" style="background:${color};"></span>
+                        <span class="tab-name">${escapeHtml(sec.name)}</span>
+                        <button class="tab-delete" title="删除分区" onclick="event.stopPropagation();deleteSection('${escapeAttr(sec.id)}')">×</button>
+                    </div>`;
+                }).join('');
+            }
+            html += `<button class="add-section-btn" title="新建分区" onclick="showModal('section')">+</button>`;
+            bar.innerHTML = html;
+        }
+
+        function renderPages() {
+            const list = document.getElementById('pageList');
+            const sec = findActiveSection();
+            if (!sec) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><div>请选择分区</div></div>';
+                return;
+            }
+            if (sec.pages.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><div>暂无页面</div></div>';
+                return;
+            }
+            list.innerHTML = sec.pages.map(p => `
+                <div class="page-item ${p.id === data.activePageId ? 'active' : ''}"
+                     onclick="selectPage('${escapeAttr(p.id)}')"
+                     oncontextmenu="showContextMenu(event, 'page', '${escapeAttr(p.id)}')">
+                    <span class="icon">📄</span>
+                    <span class="name">${escapeHtml(p.title || '无标题')}</span>
+                    <span class="page-time">${formatTime(p.updatedAt)}</span>
+                    <button class="delete-btn" title="删除" onclick="event.stopPropagation();deletePage('${escapeAttr(p.id)}')">×</button>
+                </div>
+            `).join('');
+        }
+
+        function renderEditor() {
+            const toolbar = document.getElementById('toolbar');
+            const titleEl = document.getElementById('editorTitle');
+            const contentEl = document.getElementById('editorContent');
+            const metaEl = document.getElementById('editorMeta');
+            const page = findActivePage();
+
+            if (!page) {
+                toolbar.style.display = 'none';
+                titleEl.style.display = 'none';
+                metaEl.style.display = 'none';
+                contentEl.innerHTML = '';
+                contentEl.contentEditable = 'false';
+                contentEl.style.display = 'none';
+                return;
+            }
+
+            toolbar.style.display = 'flex';
+            titleEl.style.display = '';
+            metaEl.style.display = '';
+            contentEl.style.display = '';
+            contentEl.contentEditable = 'true';
+            titleEl.value = page.title || '';
+            contentEl.innerHTML = page.content || '';
+            metaEl.textContent = '创建于 ' + formatTime(page.createdAt) + ' | 更新于 ' + formatTime(page.updatedAt);
+        }
+
+        // ==================== 选择操作 ====================
+        async function selectNotebook(id) {
+            if (data.activeNotebookId === id) return;
+            await saveCurrentPageContent();
+            data.activeNotebookId = id;
+            const nb = findNotebook(id);
+            data.activeSectionId = (nb && nb.sections.length > 0) ? nb.sections[0].id : null;
+            const sec = data.activeSectionId ? findSection(data.activeSectionId) : null;
+            data.activePageId = (sec && sec.pages.length > 0) ? sec.pages[0].id : null;
+            renderAll();
+        }
+
+        async function selectSection(id) {
+            if (data.activeSectionId === id) return;
+            await saveCurrentPageContent();
+            data.activeSectionId = id;
+            const sec = findSection(id);
+            data.activePageId = (sec && sec.pages.length > 0) ? sec.pages[0].id : null;
+            renderSections();
+            renderPages();
+            renderEditor();
+        }
+
+        async function selectPage(id) {
+            if (data.activePageId === id) return;
+            await saveCurrentPageContent();
+            data.activePageId = id;
+            renderPages();
+            renderEditor();
+        }
+
+        // ==================== 保存当前页面到文件 ====================
+        async function saveCurrentPageContent() {
+            if (!data.activePageId || !rootHandle) return;
+            const page = findActivePage();
+            if (!page) return;
+            const titleEl = document.getElementById('editorTitle');
+            const contentEl = document.getElementById('editorContent');
+            const title = titleEl ? titleEl.value : page.title;
+            const content = contentEl ? contentEl.innerHTML : page.content;
+            const now = new Date().toISOString();
+            page.title = title;
+            page.content = content;
+            page.updatedAt = now;
+
+            const nb = findActiveNotebook();
+            const sec = findActiveSection();
+            if (!nb || !sec) return;
+            try {
+                const nbHandle = await rootHandle.getDirectoryHandle(nb.id);
+                const secHandle = await nbHandle.getDirectoryHandle(sec.id);
+                await writePageFile(secHandle, page.title || 'untitled', page.title, page.content, page.createdAt || now, now);
+            } catch(e) {
+                console.error('保存页面失败:', e);
+            }
+        }
+
+        function saveCurrentPageContentSilent() {
+            if (!data.activePageId) return;
+            const page = findActivePage();
+            if (!page) return;
+            const titleEl = document.getElementById('editorTitle');
+            const contentEl = document.getElementById('editorContent');
+            if (titleEl) page.title = titleEl.value;
+            if (contentEl) page.content = contentEl.innerHTML;
+            page.updatedAt = new Date().toISOString();
+        }
+
+        // ==================== 新建操作 ====================
+        let modalType = '';
+        function showModal(type) {
+            modalType = type;
+            const overlay = document.getElementById('modalOverlay');
+            const title = document.getElementById('modalTitle');
+            const label = document.getElementById('modalLabel');
+            const input = document.getElementById('modalInput');
+
+            switch(type) {
+                case 'notebook':
+                    title.textContent = '新建笔记本';
+                    label.textContent = '笔记本名称（文件夹名）';
+                    break;
+                case 'section':
+                    if (!data.activeNotebookId) { showToast('请先选择笔记本'); return; }
+                    title.textContent = '新建分区';
+                    label.textContent = '分区名称（子文件夹名）';
+                    break;
+                case 'page':
+                    if (!data.activeSectionId) { showToast('请先选择分区'); return; }
+                    title.textContent = '新建页面';
+                    label.textContent = '页面名称（.md文件名）';
+                    break;
+            }
+            input.value = '';
+            overlay.style.display = 'flex';
+            setTimeout(() => input.focus(), 100);
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            modalType = '';
+        }
+
+        async function confirmModal() {
+            const input = document.getElementById('modalInput');
+            const name = input.value.trim();
+            if (!name) { showToast('请输入名称'); return; }
+            const safeName = sanitizeFilename(name);
+            if (!safeName) { showToast('名称无效'); return; }
+
+            try {
+                switch(modalType) {
+                    case 'notebook': {
+                        // 先检查是否已存在
+                        try { await rootHandle.getDirectoryHandle(safeName); showToast('该笔记本名称已存在'); return; } catch(_) {}
+                        const nbHandle = await rootHandle.getDirectoryHandle(safeName, { create: true });
+                        await writeMetaFile(nbHandle, new Date().toISOString());
+                        data.activeNotebookId = safeName;
+                        data.activeSectionId = null;
+                        data.activePageId = null;
+                        break;
+                    }
+                    case 'section': {
+                        const nb = findActiveNotebook();
+                        if (!nb) return;
+                        const nbHandle = await rootHandle.getDirectoryHandle(nb.id);
+                        // 先检查是否已存在
+                        try { await nbHandle.getDirectoryHandle(safeName); showToast('该分区名称已存在'); return; } catch(_) {}
+                        const secHandle = await nbHandle.getDirectoryHandle(safeName, { create: true });
+                        await writeMetaFile(secHandle, new Date().toISOString());
+                        data.activeSectionId = safeName;
+                        data.activePageId = null;
+                        break;
+                    }
+                    case 'page': {
+                        const sec = findActiveSection();
+                        if (!sec) return;
+                        const nb = findActiveNotebook();
+                        if (!nb) return;
+                        const nbHandle = await rootHandle.getDirectoryHandle(nb.id);
+                        const secHandle = await nbHandle.getDirectoryHandle(sec.id);
+                        // 先检查是否已存在
+                        const pageFileName = safeName + '.md';
+                        try { await secHandle.getFileHandle(pageFileName); showToast('该页面名称已存在'); return; } catch(_) {}
+                        const now = new Date().toISOString();
+                        await writePageFile(secHandle, safeName, name, '', now, now);
+                        data.activePageId = pageFileName;
+                        break;
+                    }
+                }
+                await scanAndLoad();
+                closeModal();
+            } catch(e) {
+                showToast('创建失败: ' + e.message);
+            }
+        }
+
+        // ==================== 删除操作 ====================
+        async function deleteNotebook(id) {
+            if (!confirm('确定删除此笔记本及其所有内容？此操作不可恢复。')) return;
+            try {
+                await rootHandle.removeEntry(id, { recursive: true });
+                if (data.activeNotebookId === id) {
+                    data.activeNotebookId = data.notebooks.length > 1 ?
+                        data.notebooks.find(n => n.id !== id)?.id || null : null;
+                    data.activeSectionId = null;
+                    data.activePageId = null;
+                }
+                await scanAndLoad();
+                showToast('笔记本已删除');
+            } catch(e) { showToast('删除失败: ' + e.message); }
+        }
+
+        async function deleteSection(id) {
+            const nb = findActiveNotebook();
+            if (!nb) return;
+            if (!confirm('确定删除此分区及其所有页面？此操作不可恢复。')) return;
+            try {
+                const nbHandle = await rootHandle.getDirectoryHandle(nb.id);
+                await nbHandle.removeEntry(id, { recursive: true });
+                if (data.activeSectionId === id) {
+                    const remaining = nb.sections.filter(s => s.id !== id);
+                    data.activeSectionId = remaining.length > 0 ? remaining[0].id : null;
+                    const sec = data.activeSectionId ? remaining[0] : null;
+                    data.activePageId = (sec && sec.pages.length > 0) ? sec.pages[0].id : null;
+                }
+                await scanAndLoad();
+                showToast('分区已删除');
+            } catch(e) { showToast('删除失败: ' + e.message); }
+        }
+
+        async function deletePage(id) {
+            const sec = findActiveSection();
+            const nb = findActiveNotebook();
+            if (!sec || !nb) return;
+            if (!confirm('确定删除此页面？')) return;
+            try {
+                const nbHandle = await rootHandle.getDirectoryHandle(nb.id);
+                const secHandle = await nbHandle.getDirectoryHandle(sec.id);
+                await secHandle.removeEntry(id);
+                if (data.activePageId === id) {
+                    const remaining = sec.pages.filter(p => p.id !== id);
+                    data.activePageId = remaining.length > 0 ? remaining[0].id : null;
+                }
+                await scanAndLoad();
+                showToast('页面已删除');
+            } catch(e) { showToast('删除失败: ' + e.message); }
+        }
+
+        // ==================== 编辑操作 ====================
+        function onTitleChange() {
+            const page = findActivePage();
+            if (!page) return;
+            page.title = document.getElementById('editorTitle').value;
+            page.updatedAt = new Date().toISOString();
+            debounceSaveToFile();
+            debounceRenderPages();
+        }
+
+        function onContentChange() {
+            const page = findActivePage();
+            if (!page) return;
+            page.content = document.getElementById('editorContent').innerHTML;
+            page.updatedAt = new Date().toISOString();
+            debounceSaveToFile();
+            debounceRenderPages();
+        }
+
+        let fsSaveTimer, renderTimer;
+        function debounceSaveToFile() {
+            clearTimeout(fsSaveTimer);
+            fsSaveTimer = setTimeout(() => saveCurrentPageContent(), 600);
+        }
+        function debounceRenderPages() {
+            clearTimeout(renderTimer);
+            renderTimer = setTimeout(() => renderPages(), 800);
+        }
+
+        // ==================== 工具栏命令 ====================
+        function execCmd(command, value) {
+            document.execCommand(command, false, value);
+            document.getElementById('editorContent').focus();
+            onContentChange();
+        }
+
+        // ==================== 搜索 ====================
+        function handleSearch() {
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            if (!query) { renderAll(); return; }
+            saveCurrentPageContentSilent();
+            let found = null;
+            for (const nb of data.notebooks) {
+                for (const sec of nb.sections) {
+                    for (const p of sec.pages) {
+                        const match = (p.title || '').toLowerCase().includes(query) ||
+                                      stripHtml(p.content || '').toLowerCase().includes(query);
+                        p._searchMatch = match;
+                        if (match && !found) found = { pageId: p.id, sectionId: sec.id, notebookId: nb.id };
+                    }
+                }
+            }
+            if (found) {
+                data.activeNotebookId = found.notebookId;
+                data.activeSectionId = found.sectionId;
+                data.activePageId = found.pageId;
+            }
+            renderAll();
+            if (found && query) { highlightSearch(query); setTimeout(() => highlightSidebar(query), 200); }
+        }
+
+        function highlightSearch(query) {
+            const el = document.getElementById('editorContent');
+            if (!el) return;
+            el.querySelectorAll('mark.search-highlight').forEach(m => {
+                m.parentNode.replaceChild(document.createTextNode(m.textContent), m);
+                m.parentNode.normalize();
+            });
+            if (!query) return;
+            highlightTextInNode(el, query);
+        }
+
+        function highlightTextInNode(node, query) {
+            if (node.nodeType === 3) {
+                const text = node.textContent;
+                const idx = text.toLowerCase().indexOf(query);
+                if (idx >= 0) {
+                    const span = document.createElement('span');
+                    span.innerHTML = escapeHtml(text.substring(0, idx)) +
+                        '<mark class="search-highlight" style="background:#ffeb3b;padding:0 1px;">' +
+                        escapeHtml(text.substring(idx, idx + query.length)) + '</mark>' +
+                        escapeHtml(text.substring(idx + query.length));
+                    node.parentNode.replaceChild(span, node);
+                }
+            } else if (node.nodeType === 1 && node.childNodes.length > 0 &&
+                       !['SCRIPT','STYLE','MARK'].includes(node.tagName)) {
+                for (let i = 0; i < node.childNodes.length; i++) highlightTextInNode(node.childNodes[i], query);
+            }
+        }
+
+        function highlightSidebar(query) {
+            document.querySelectorAll('.page-item').forEach(el => {
+                if (el.textContent.toLowerCase().includes(query)) el.style.background = '#fff9c4';
+            });
+        }
+
+        // ==================== 右键菜单 ====================
+        let contextTarget = null;
+        function showContextMenu(e, type, id) {
+            e.preventDefault();
+            contextTarget = { type, id };
+            const menu = document.getElementById('contextMenu');
+            let html = `<div class="menu-item" onclick="renameItem();hideContextMenu()">✏️ 重命名</div>`;
+            if (type === 'notebook')
+                html += `<div class="menu-item danger" onclick="deleteNotebook('${escapeAttr(id)}');hideContextMenu()">🗑 删除</div>`;
+            else if (type === 'section')
+                html += `<div class="menu-item danger" onclick="deleteSection('${escapeAttr(id)}');hideContextMenu()">🗑 删除</div>`;
+            else
+                html += `<div class="menu-item danger" onclick="deletePage('${escapeAttr(id)}');hideContextMenu()">🗑 删除</div>`;
+            menu.innerHTML = html;
+            menu.style.display = 'block';
+            menu.style.left = Math.min(e.clientX, window.innerWidth - 160) + 'px';
+            menu.style.top = Math.min(e.clientY, window.innerHeight - 100) + 'px';
+        }
+        function hideContextMenu() { document.getElementById('contextMenu').style.display = 'none'; }
+
+        async function renameItem() {
+            if (!contextTarget) return;
+            const { type, id } = contextTarget;
+            let currentName = '', parentHandle = null;
+            const nb = findActiveNotebook();
+
+            if (type === 'notebook') {
+                const item = findNotebook(id);
+                if (item) { currentName = item.name; parentHandle = rootHandle; }
+            } else if (type === 'section') {
+                const item = findSection(id);
+                if (item && nb) {
+                    currentName = item.name;
+                    parentHandle = await rootHandle.getDirectoryHandle(nb.id);
+                }
+            } else if (type === 'page') {
+                const page = findActivePage();
+                const sec = findActiveSection();
+                if (page && sec && nb) {
+                    currentName = page.id.replace(/\.md$/, '');
+                    const nbHandle = await rootHandle.getDirectoryHandle(nb.id);
+                    parentHandle = await nbHandle.getDirectoryHandle(sec.id);
+                }
+            }
+            if (!parentHandle) return;
+            const newName = prompt('请输入新名称：', currentName);
+            if (!newName || !newName.trim() || newName.trim() === currentName) return;
+            const safeNew = sanitizeFilename(newName.trim());
+            if (!safeNew) return;
+
+            try {
+                const newFinal = type === 'page' ? safeNew + '.md' : safeNew;
+                await renameEntry(parentHandle, id, newFinal);
+                await scanAndLoad();
+            } catch(e) { showToast('重命名失败: ' + e.message); }
+        }
+
+        // ==================== 工具函数 ====================
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+        function escapeAttr(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function stripHtml(html) {
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            return div.textContent || '';
+        }
+        function formatTime(isoStr) {
+            if (!isoStr) return '';
+            const d = new Date(isoStr);
+            const now = new Date();
+            const diff = now - d;
+            if (diff < 60000) return '刚刚';
+            if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+            if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
+            return (d.getMonth() + 1).toString().padStart(2, '0') + '/' + d.getDate().toString().padStart(2, '0');
+        }
+        let toastTimer;
+        function showToast(msg) {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            clearTimeout(toastTimer);
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            toastTimer = setTimeout(() => toast.remove(), 2000);
+        }
+
+        // ==================== 键盘快捷键 ====================
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key.toLowerCase()) {
+                    case 's': e.preventDefault(); saveCurrentPageContent().then(() => showToast('已保存')); break;
+                    case 'b': e.preventDefault(); execCmd('bold'); break;
+                    case 'i': e.preventDefault(); execCmd('italic'); break;
+                    case 'u': e.preventDefault(); execCmd('underline'); break;
+                    case 'n': e.preventDefault(); showModal('page'); break;
+                }
+            }
+        });
+
+        // 点击其他地方关闭右键菜单
+        document.addEventListener('click', hideContextMenu);
+
+        // ==================== 初始化 ====================
+        async function init() {
+            if (!window.showDirectoryPicker) {
+                document.getElementById('fsOverlay').querySelector('p').innerHTML =
+                    '您的浏览器不支持 File System Access API。<br>请使用 <b>Chrome / Edge 86+</b> 打开此页面。';
+                document.getElementById('fsSelectBtn').style.display = 'none';
+                return;
+            }
+            await initFileSystem();
+        }
+
+        init();
+    </script>
+</body>
+</html>
